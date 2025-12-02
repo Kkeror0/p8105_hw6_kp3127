@@ -6,6 +6,7 @@ date: "2025-12-02"
 ```{r setup, echo=FALSE}
 library(tidyverse)
 library(broom)
+library(modelr)
 library(ggplot2)
 library(rvest)
 library(patchwork)
@@ -135,7 +136,7 @@ weather_df %>%
 ```{r}
 boot_results = 
   weather_df %>% 
-  modelr::bootstrap(n = 5000, id = "boot_id") %>% 
+  bootstrap(n = 5000, id = "boot_id") %>% 
   mutate(
     model  = map(strap, ~ lm(tmax ~ tmin + prcp, data = .x)),
     glance = map(model, glance),
@@ -173,7 +174,6 @@ ggplot(boot_long, aes(x = estimate)) +
     title = "Bootstrap distributions of R² and β1 / β2"
   ) +
   theme_minimal()
-
 ```
 
 ```{r}
@@ -191,6 +191,47 @@ boot_CI %>%
 
 The bootstrap distribution of R² is approximately symmetric and tightly concentrated around 0.94, indicating that the model consistently explains a large proportion of the variability in daily maximum temperature. The 95% bootstrap CI for R² is (0.934, 0.947), so in repeated samples we would expect R² to fall in roughly this 93–95% range.
 
-The distribution of β1 / β2 is wider and slightly skewed, with all values negative. The 95% bootstrap CI for the slope ratio is (−279.745 −125.69), suggesting that the coefficients for tmin and precipitation have opposite signs and that the magnitude of their ratio is large but estimated with more uncertainty than R²
+The distribution of β1 / β2 is wider and slightly skewed, with all values negative. The 95% bootstrap CI for the slope ratio is (−279.745 −125.69), suggesting that the coefficients for tmin and precipitation have opposite signs and that the magnitude of their ratio is large but estimated with more uncertainty than R².
 
-.
+# Problem 3
+Clean the data
+```{r}
+birthweight_df=read_csv("./birthweight.csv") %>% 
+  mutate(
+    babysex = factor(babysex, labels = c("male", "female")),
+    frace   = factor(frace),
+    mrace   = factor(mrace),
+    malform = factor(malform),
+  )
+```
+
+Propose my own regression model for birthweight:
+I aimed to include variables that reflect infant size at birth, gestational age, and maternal characteristics that plausibly influence fetal growth. 
+```{r}
+bw_main <- lm(
+  bwt ~ bhead + blength + babysex + gaweeks +
+    ppbmi + wtgain + momage + smoken + mrace,
+  data = birthweight_df
+)
+summary(bw_main)
+```
+
+The model explains roughly 71% of the variability in birthweight (djusted R² = 0.713), which indicates fairly strong explanatory power. The overall F-test is highly significant (F(11, 4330) = 982.4, p < 0.001), providing strong evidence that the set of predictors jointly improves prediction of birthweight compared with an intercept-only model.
+```{r}
+bw_main_aug <- 
+  birthweight_df |>
+  add_predictions(bw_main) |>
+  add_residuals(bw_main)
+
+ggplot(bw_main_aug, aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs fitted values for main birthweight model"
+  ) +
+  theme_minimal()
+```
+
+The residuals are generally centered around zero across the range of fitted birthweights, and there is no strong curvature or systematic pattern, which supports the linearity assumption. The spread of residuals is fairly constant for most fitted values, although there are a few extreme outliers at very low and very high fitted birthweights. 
