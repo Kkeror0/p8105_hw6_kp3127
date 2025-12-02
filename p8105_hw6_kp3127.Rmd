@@ -127,5 +127,70 @@ The estimated odds ratios for solving homicides comparing male with female victi
 ```{r}
 library(p8105.datasets)
 data("weather_df")
+
+weather_df %>% 
+  drop_na(tmax, tmin, prcp)
 ```
 
+```{r}
+boot_results = 
+  weather_df %>% 
+  modelr::bootstrap(n = 5000, id = "boot_id") %>% 
+  mutate(
+    model  = map(strap, ~ lm(tmax ~ tmin + prcp, data = .x)),
+    glance = map(model, glance),
+    tidy   = map(model, tidy)
+  ) %>% 
+  mutate(
+    r2 = map_dbl(glance, "r.squared"),
+    beta_ratio = map_dbl(
+      tidy,
+      ~ {
+        b1 <- filter(.x, term == "tmin")  %>%  pull(estimate)
+        b2 <- filter(.x, term == "prcp") %>%  pull(estimate)
+        b1 / b2
+      }
+    )
+  ) %>% 
+  select(boot_id, r2, beta_ratio)
+```
+
+```{r}
+boot_long = 
+  boot_results %>% 
+  pivot_longer(
+    cols = c(r2, beta_ratio),
+    names_to = "parameter",
+    values_to = "estimate"
+  )
+
+ggplot(boot_long, aes(x = estimate)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ parameter, scales = "free") +
+  labs(
+    x = "Bootstrap estimate",
+    y = "Count",
+    title = "Bootstrap distributions of R² and β1 / β2"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+boot_CI = 
+  boot_results %>% 
+  summarize(
+    r2_lower   = quantile(r2, 0.025),
+    r2_upper   = quantile(r2, 0.975),
+    ratio_lower = quantile(beta_ratio, 0.025),
+    ratio_upper = quantile(beta_ratio, 0.975)
+  ) 
+boot_CI %>% 
+  knitr::kable(digits = 3)
+```
+
+The bootstrap distribution of R² is approximately symmetric and tightly concentrated around 0.94, indicating that the model consistently explains a large proportion of the variability in daily maximum temperature. The 95% bootstrap CI for R² is (0.934, 0.947), so in repeated samples we would expect R² to fall in roughly this 93–95% range.
+
+The distribution of β1 / β2 is wider and slightly skewed, with all values negative. The 95% bootstrap CI for the slope ratio is (−279.745 −125.69), suggesting that the coefficients for tmin and precipitation have opposite signs and that the magnitude of their ratio is large but estimated with more uncertainty than R²
+
+.
