@@ -121,3 +121,11 @@ ggplot(city_or_df, aes(x = city_state,
   theme_minimal() 
 ```
 
+The estimated odds ratios for solving homicides comparing male with female victims vary substantially across cities. In many cities the point estimates are below 1, suggesting that cases with male victims may be less likely to be solved than those with female victims, although most confidence intervals are wide and include 1, indicating considerable uncertainty. Only a few cities show point estimates clearly above 1. Overall, there is no consistent pattern across all cities, and the wide CIs (especially in some smaller cities) suggest that sex differences in clearance may be modest and imprecisely estimated.
+
+# Problem 2
+```{r}
+library(p8105.datasets)
+data("weather_df")
+```
+
