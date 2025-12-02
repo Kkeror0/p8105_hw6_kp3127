@@ -6,6 +6,7 @@ date: "2025-12-02"
 ```{r setup, echo=FALSE}
 library(tidyverse)
 library(broom)
+library(ggplot2)
 library(rvest)
 library(patchwork)
 library(purrr)
@@ -52,7 +53,7 @@ homi_df=read.csv("./homicide-data.csv") %>%
   )  
 ```
 
-Logistic regression
+Logistic regression for Baltimore
 ```{r}
 baltimore_df = homi_df %>% 
   filter(city_state == "Baltimore, MD")
@@ -72,5 +73,51 @@ baltimore_or =
 
 baltimore_or |> 
   knitr::kable(digits = 3)
+```
+
+Logistic regression for all
+```{r}
+city_or_df <- 
+  homi_df |>
+  group_by(city_state) |>
+  nest() |>
+  mutate(
+    model = map(
+      data,
+      ~ .x |>
+        mutate(
+          victim_sex  = fct_relevel(victim_sex, "Female"),
+          victim_race = fct_relevel(victim_race, "White")
+        ) |>
+        glm(
+          solved ~ victim_age + victim_sex + victim_race,
+          data   = _,
+          family = binomial()
+        )
+    ),
+    results = map(
+      model,
+      ~ tidy(.x, conf.int = TRUE, exponentiate = TRUE)
+    )
+  ) |>
+  unnest(results) |>
+  filter(term == "victim_sexMale") |>
+  select(city_state,estimate,conf.low,conf.high) |>
+  arrange(city_state)
+```
+
+Plots
+```{r}
+ggplot(city_or_df, aes(x = city_state, 
+                            y = estimate)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_flip() +
+  labs(
+    x = "City",
+    y = "Adjusted OR (Male vs Female)",
+    title = "Adjusted odds ratio of homicide being solved,\ncomparing male vs female victims by city"
+  ) +
+  theme_minimal() 
 ```
 
