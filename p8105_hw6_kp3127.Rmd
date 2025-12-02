@@ -235,3 +235,70 @@ ggplot(bw_main_aug, aes(x = pred, y = resid)) +
 ```
 
 The residuals are generally centered around zero across the range of fitted birthweights, and there is no strong curvature or systematic pattern, which supports the linearity assumption. The spread of residuals is fairly constant for most fitted values, although there are a few extreme outliers at very low and very high fitted birthweights. 
+
+Compare my model to two models
+```{r}
+mod_A <- lm(bwt ~ blength + gaweeks, data = birthweight_df)
+
+mod_B <- lm(bwt ~ bhead * blength * babysex, data = birthweight_df)
+
+mod_C <- bw_main
+
+```
+
+CV
+```{r}
+cv_df <- 
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test  = map(test,  as_tibble),
+    mod_A = map(train, ~ lm(bwt ~ blength + gaweeks, data = .x)),
+    mod_B = map(train, ~ lm(bwt ~ bhead * blength * babysex, data = .x)),
+    mod_C = map(train, ~ lm(
+      bwt ~ bhead + blength + babysex + gaweeks +
+        ppbmi + wtgain + momage + smoken + mrace,
+      data = .x
+    )),
+    rmse_A = map2_dbl(mod_A, test, ~ rmse(.x, .y)),
+    rmse_B = map2_dbl(mod_B, test, ~ rmse(.x, .y)),
+    rmse_C = map2_dbl(mod_C, test, ~ rmse(.x, .y))
+  )
+
+cv_long = 
+  cv_df %>% 
+  select(starts_with("rmse_")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse"
+  ) %>% 
+  mutate(model = recode(model,
+                        rmse_A = "A: blength + gaweeks",
+                        rmse_B = "B: bhead*blength*babysex",
+                        rmse_C = "C: my model"))
+```
+
+```{r}
+cv_summary = 
+  cv_long %>% 
+  group_by(model) %>% 
+  summarise(
+    mean_rmse = mean(rmse),
+    sd_rmse   = sd(rmse)
+  )
+
+cv_summary %>% 
+  knitr::kable()
+
+ggplot(cv_long, aes(x = model, y = rmse)) +
+  geom_boxplot() +
+  labs(
+    x = "Model",
+    y = "RMSE",
+    title = "Cross-validated prediction error for three birthweight models"
+  ) +
+  theme_minimal()
+```
+
+The cross-validated RMSEs show clear differences in out-of-sample performance across the three models. Model A, which only includes birth length and gestational age, has the highest prediction error (mean RMSE = 332) and the greatest variability, suggesting substantial underfitting. Model B, which includes head circumference, birth length, infant sex, and their interactions, performs better (mean RMSE = 288). My proposed model (Model C) has the lowest mean RMSE (mean RMSE = 275) and the tightest distribution, indicating the best and most stable predictive performance. Overall, adding additional maternal and infant covariates in Model C improves prediction beyond both the very simple model and the interaction-only model.
