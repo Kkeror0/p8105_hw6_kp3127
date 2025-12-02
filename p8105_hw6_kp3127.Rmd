@@ -5,6 +5,7 @@ date: "2025-12-02"
 ---
 ```{r setup, echo=FALSE}
 library(tidyverse)
+library(broom)
 library(rvest)
 library(patchwork)
 library(purrr)
@@ -28,3 +29,48 @@ set.seed(1)
 ```
 
 # Problem 1
+Cleaning the dataset 
+```{r}
+homi_df=read.csv("./homicide-data.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    city_state = str_c(city, ", ", state),
+    victim_age = as.numeric(victim_age),
+    solved = if_else(disposition == "Open/No arrest", 0, 1),
+  ) %>% 
+  filter(
+    !city_state %in% c("Dallas, TX", "Phoenix, AZ", 
+                       "Kansas City, MO", "Tulsa, AL"),
+    victim_race %in% c("White", "Black"),
+    !is.na(victim_age),
+    !is.na(victim_sex),
+    !is.na(solved)
+  ) %>% 
+  mutate(
+    victim_race = fct_relevel(victim_race, "White"),
+    victim_sex  = fct_relevel(victim_sex, "Female")
+  )  
+```
+
+Logistic regression
+```{r}
+baltimore_df = homi_df %>% 
+  filter(city_state == "Baltimore, MD")
+
+baltimore_fit = 
+  glm(
+    solved~victim_age + victim_sex + victim_race,
+    data   = baltimore_df,
+    family = binomial()
+  )
+
+baltimore_or =
+  baltimore_fit %>% 
+  tidy(conf.int = TRUE, exponentiate = TRUE) %>% 
+  filter(term == "victim_sexMale") %>% 
+  select(term, estimate, conf.low, conf.high)
+
+baltimore_or |> 
+  knitr::kable(digits = 3)
+```
+

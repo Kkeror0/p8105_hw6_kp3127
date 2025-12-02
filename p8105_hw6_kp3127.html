@@ -374,6 +374,67 @@ display: none;
 ##     guess_encoding</code></pre>
 <div id="problem-1" class="section level1">
 <h1>Problem 1</h1>
+<p>Cleaning the dataset</p>
+<pre class="r"><code>homi_df=read.csv(&quot;./homicide-data.csv&quot;) %&gt;% 
+  janitor::clean_names() %&gt;% 
+  mutate(
+    city_state = str_c(city, &quot;, &quot;, state),
+    victim_age = as.numeric(victim_age),
+    solved = if_else(disposition == &quot;Open/No arrest&quot;, 0, 1),
+  ) %&gt;% 
+  filter(
+    !city_state %in% c(&quot;Dallas, TX&quot;, &quot;Phoenix, AZ&quot;, 
+                       &quot;Kansas City, MO&quot;, &quot;Tulsa, AL&quot;),
+    victim_race %in% c(&quot;White&quot;, &quot;Black&quot;),
+    !is.na(victim_age),
+    !is.na(victim_sex),
+    !is.na(solved)
+  ) %&gt;% 
+  mutate(
+    victim_race = fct_relevel(victim_race, &quot;White&quot;),
+    victim_sex  = fct_relevel(victim_sex, &quot;Female&quot;)
+  )  </code></pre>
+<pre><code>## Warning: There was 1 warning in `mutate()`.
+## ℹ In argument: `victim_age = as.numeric(victim_age)`.
+## Caused by warning:
+## ! NAs introduced by coercion</code></pre>
+<p>Logistic regression</p>
+<pre class="r"><code>baltimore_df = homi_df %&gt;% 
+  filter(city_state == &quot;Baltimore, MD&quot;)
+
+baltimore_fit = 
+  glm(
+    solved~victim_age + victim_sex + victim_race,
+    data   = baltimore_df,
+    family = binomial()
+  )
+
+baltimore_or =
+  baltimore_fit %&gt;% 
+  tidy(conf.int = TRUE, exponentiate = TRUE) %&gt;% 
+  filter(term == &quot;victim_sexMale&quot;) %&gt;% 
+  select(term, estimate, conf.low, conf.high)
+
+baltimore_or |&gt; 
+  knitr::kable(digits = 3)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">term</th>
+<th align="right">estimate</th>
+<th align="right">conf.low</th>
+<th align="right">conf.high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">victim_sexMale</td>
+<td align="right">0.355</td>
+<td align="right">0.267</td>
+<td align="right">0.468</td>
+</tr>
+</tbody>
+</table>
 </div>
 
 
